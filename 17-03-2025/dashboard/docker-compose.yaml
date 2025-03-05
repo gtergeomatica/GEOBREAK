@@ -1,0 +1,15 @@
+services:
+  dash:
+    build: 
+      context: .
+      dockerfile: docker/dashboard/Dockerfile
+    ports:
+      - "8050:8050"
+    environment:
+      - BACKEND_URL
+    networks:
+      - backend-network
+
+networks:
+  backend-network:
+    external: true
