@@ -6,7 +6,7 @@ from dash import dcc, html, Input, Output, State
 import plotly.graph_objs as go
 
 # Variabile d'ambiente per il backend; se non definita, usa il default
-BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000")
+BACKEND_URL = os.getenv("BASE_BACKEND_URL", "http://localhost:8000")
 
 # Recuperiamo la lista dei sensori dalla API all'avvio dell'app
 try:
@@ -21,12 +21,11 @@ dropdown_options = []
 for sensor in sensors:
     if isinstance(sensor, dict):
         dropdown_options.append({
-            'label': f"{sensor.get('id', 'N/D')} - {sensor.get('name', 'Senza nome')}",
+            'label': f"{sensor.get('name', 'Senza nome')}",
             'value': sensor.get('id')
         })
     else:
         print("Formato sensore inatteso:", sensor)
-
 
 # Inizializziamo l'app Dash utilizzando un tema Bootstrap moderno
 external_stylesheets = [dbc.themes.FLATLY]
@@ -58,8 +57,10 @@ app.layout = dbc.Container([
             width=12
         )
     ),
-    # Aggiornamento automatico ogni 2 secondi
+    # Aggiornamento automatico ogni 2 secondi per il grafico
     dcc.Interval(id='interval-component', interval=2000, n_intervals=0),
+    # Aggiornamento automatico ogni 5 secondi per il dropdown
+    dcc.Interval(id='dropdown-interval', interval=5000, n_intervals=0),
     # Conserviamo in memoria lo storico dei dati per il sensore selezionato
     dcc.Store(id='sensor-store', data={"sensor_id": None, "timestamps": [], "values": []})
 ], fluid=True)
@@ -112,6 +113,29 @@ def update_graph(n_intervals, sensor_id, store_data):
     )
 
     return store_data, fig
+
+@app.callback(
+    Output('sensor-dropdown', 'options'),
+    Input('dropdown-interval', 'n_intervals')
+)
+def update_dropdown(n_intervals):
+    print("---------------------------- dropdown")
+    try:
+        response = requests.get(f"{BACKEND_URL}/sensors")
+        sensors = response.json()
+    except Exception as e:
+        print("Errore nel recupero dei sensori:", e)
+        sensors = []
+    options = []
+    for sensor in sensors:
+        if isinstance(sensor, dict):
+            options.append({
+                'label': f"{sensor.get('name', 'Senza nome')}",
+                'value': sensor.get('id')
+            })
+        else:
+            print("Formato sensore inatteso:", sensor)
+    return options
 
 if __name__ == '__main__':
     app.run_server(debug=True, host='0.0.0.0')
