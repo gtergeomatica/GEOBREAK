@@ -16,14 +16,18 @@ except Exception as e:
     print("Errore nel recupero dei sensori:", e)
     sensors = []
 
-# Costruiamo le opzioni per il dropdown usando l'id e il nome del sensore
+# Costruiamo le opzioni per il dropdown raggruppando per nome (evitiamo duplicati)
 dropdown_options = []
+sensor_names = set()
 for sensor in sensors:
     if isinstance(sensor, dict):
-        dropdown_options.append({
-            'label': f"{sensor.get('name', 'Senza nome')}",
-            'value': sensor.get('id')
-        })
+        sensor_name = sensor.get('name', 'Senza nome')
+        if sensor_name not in sensor_names:
+            sensor_names.add(sensor_name)
+            dropdown_options.append({
+                'label': sensor_name,
+                'value': sensor_name  # Usare il nome come identificatore
+            })
     else:
         print("Formato sensore inatteso:", sensor)
 
@@ -61,8 +65,8 @@ app.layout = dbc.Container([
     dcc.Interval(id='interval-component', interval=2000, n_intervals=0),
     # Aggiornamento automatico ogni 5 secondi per il dropdown
     dcc.Interval(id='dropdown-interval', interval=5000, n_intervals=0),
-    # Conserviamo in memoria lo storico dei dati per il sensore selezionato
-    dcc.Store(id='sensor-store', data={"sensor_id": None, "timestamps": [], "values": []})
+    # Conserviamo in memoria lo storico dei dati per il sensore selezionato, utilizzando il nome
+    dcc.Store(id='sensor-store', data={"sensor_name": None, "timestamps": [], "values": []})
 ], fluid=True)
 
 # Callback per aggiornare il grafico in tempo reale
@@ -73,28 +77,29 @@ app.layout = dbc.Container([
     State('sensor-dropdown', 'value'),
     State('sensor-store', 'data'),
 )
-def update_graph(n_intervals, sensor_id, store_data):
+def update_graph(n_intervals, sensor_name, store_data):
     # Se non è stato selezionato alcun sensore, restituisco un grafico vuoto
-    if sensor_id is None:
+    if sensor_name is None:
         return store_data, go.Figure(data=[], layout=go.Layout(template='plotly_white'))
     
-    # Se l'utente ha cambiato il sensore, ripuliamo lo storico
-    if store_data.get("sensor_id") != sensor_id:
-        store_data = {"sensor_id": sensor_id, "timestamps": [], "values": []}
+    # Se l'utente ha cambiato sensore (nome), ripuliamo lo storico
+    if store_data.get("sensor_name") != sensor_name:
+        store_data = {"sensor_name": sensor_name, "timestamps": [], "values": []}
 
-    # Effettuiamo una richiesta all'API per ottenere i dati aggiornati del sensore
     try:
-        res = requests.get(f"{BACKEND_URL}/sensors/{sensor_id}")
-        sensor = res.json()
-        # Preleviamo il timestamp e il valore dal sensore
-        timestamp = sensor.get('timestamp')
-        value = sensor.get('value')
-        store_data["timestamps"].append(timestamp)
-        store_data["values"].append(value)
+        # Effettuiamo una richiesta al nuovo endpoint passando il nome del sensore
+        res = requests.get(f"{BACKEND_URL}/sensors/by_name/{sensor_name}")
+        sensor_data = res.json()  # Ci aspettiamo una lista di record
+        # Ordiniamo la lista in base al timestamp (opzionale, se non già ordinata)
+        sensor_data.sort(key=lambda record: record.get('timestamp'))
+        
+        # Aggiorniamo lo store con tutti i record ricevuti
+        store_data["timestamps"] = [record.get("timestamp") for record in sensor_data]
+        store_data["values"] = [record.get("value") for record in sensor_data]
     except Exception as e:
         print("Errore nel recupero del sensore:", e)
 
-    # Creiamo il grafico con stile moderno
+    # Creiamo il grafico con i dati aggiornati
     fig = go.Figure(
         data=go.Scatter(
             x=store_data["timestamps"],
@@ -105,7 +110,7 @@ def update_graph(n_intervals, sensor_id, store_data):
         )
     )
     fig.update_layout(
-        title=f"Sensor {sensor_id} in tempo reale",
+        title=f"Sensor {sensor_name} in tempo reale",
         xaxis_title="Timestamp",
         yaxis_title="Valore",
         template="plotly_white",
@@ -114,12 +119,13 @@ def update_graph(n_intervals, sensor_id, store_data):
 
     return store_data, fig
 
+# Callback per aggiornare le opzioni del dropdown (anche qui raggruppando per nome)
 @app.callback(
     Output('sensor-dropdown', 'options'),
     Input('dropdown-interval', 'n_intervals')
 )
 def update_dropdown(n_intervals):
-    print("---------------------------- dropdown")
+    print("---------------------------- aggiornamento dropdown")
     try:
         response = requests.get(f"{BACKEND_URL}/sensors")
         sensors = response.json()
@@ -127,14 +133,19 @@ def update_dropdown(n_intervals):
         print("Errore nel recupero dei sensori:", e)
         sensors = []
     options = []
+    sensor_names = set()
     for sensor in sensors:
         if isinstance(sensor, dict):
-            options.append({
-                'label': f"{sensor.get('name', 'Senza nome')}",
-                'value': sensor.get('id')
-            })
+            sensor_name = sensor.get('name', 'Senza nome')
+            if sensor_name not in sensor_names:
+                sensor_names.add(sensor_name)
+                options.append({
+                    'label': sensor_name,
+                    'value': sensor_name
+                })
         else:
             print("Formato sensore inatteso:", sensor)
+    
     return options
 
 if __name__ == '__main__':

@@ -9,7 +9,7 @@ BASE_URL = os.getenv("BASE_BACKEND_URL","http://localhost:8000")
 
 while True:
     sensor_data = {
-        "name": f"C-Sensor {random.randint(1, 5)}",
+        "name": f"Sensor-{random.randint(1, 5)}",
         "value": round(random.uniform(0, 100), 2),
         "timestamp": datetime.now().isoformat()
     }

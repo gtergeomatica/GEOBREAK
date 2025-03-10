@@ -44,6 +44,15 @@ def get_sensor(sensor_id: int):
         if not sensor:
             raise HTTPException(status_code=404, detail="Sensore non trovato")
         return sensor
+    
+@app.get("/sensors/by_name/{sensor_name}", response_model=List[Sensor])
+def get_sensor_by_name(sensor_name: str):
+    with Session(engine) as session:
+        statement = select(Sensor).where(Sensor.name == sensor_name)
+        sensors = session.exec(statement).all()
+        if not sensors:
+            raise HTTPException(status_code=404, detail="Sensore non trovato")
+        return sensors
 
 # --- UPDATE: aggiornamento completo (PUT) ---
 @app.put("/sensors/{sensor_id}", response_model=Sensor)
